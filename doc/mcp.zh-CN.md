@@ -68,7 +68,7 @@ Future<void> main() async {
 
     final queries = ['Dart supported platforms compilation'];
     final search = await session.callToolResult('web_search', {
-      'objective': 'Find official Dart documentation about supported platforms.',
+      'objective': 'Find official documentation on Dart platforms.',
       'search_queries': queries,
     });
     if (search.isError) throw StateError(search.text);
