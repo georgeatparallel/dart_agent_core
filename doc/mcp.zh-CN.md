@@ -36,6 +36,62 @@ await manager.connectAll([
 ]);
 ```
 
+#### Parallel 网页搜索
+
+[Parallel Search MCP](https://docs.parallel.ai/integrations/mcp/search-mcp) 通过 Streamable HTTP 提供 `web_search` 和 `web_fetch`。它支持免费匿名使用，无需 Parallel 账号或 API Key；匿名搜索使用 Fast 模式。服务有用量限制。
+
+下面的 Dart VM 示例直接调用工具，不需要 LLM 客户端。将代码保存为 `example/parallel_search.dart`，运行 `dart pub get`，然后运行 `dart run example/parallel_search.dart`：
+
+```dart
+import 'package:dart_agent_core/dart_agent_core.dart';
+
+const parallelConfig = McpConnectionConfig(
+  serverName: 'parallel',
+  type: McpTransportType.http,
+  url: 'https://search.parallel.ai/mcp',
+  headers: {'User-Agent': 'dart_agent_core/parallel-search-docs'},
+);
+
+Future<void> main() async {
+  final manager = McpManager();
+  try {
+    await manager.connectAll([parallelConfig]);
+    final session = manager.getSession('parallel');
+    if (session == null) {
+      throw StateError('Could not connect to Parallel Search MCP.');
+    }
+
+    // 构造请求前，先查看当前工具的 Schema。
+    for (final tool in session.tools) {
+      print('${tool.name}: ${tool.inputSchema}');
+    }
+
+    final queries = ['Dart supported platforms compilation'];
+    final search = await session.callToolResult('web_search', {
+      'objective': 'Find official Dart documentation about supported platforms.',
+      'search_queries': queries,
+    });
+    if (search.isError) throw StateError(search.text);
+    print(search.text);
+
+    // 获取已知网页；也可以替换为搜索结果中的 URL，进一步阅读。
+    final page = await session.callToolResult('web_fetch', {
+      'urls': ['https://dart.dev/overview'],
+      'objective': 'Describe the supported platforms and compilation targets.',
+      'search_queries': queries,
+    });
+    if (page.isError) throw StateError(page.text);
+    print(page.text);
+  } finally {
+    await manager.dispose();
+  }
+}
+```
+
+上面的自定义 `User-Agent` 适用于 Dart VM 客户端；浏览器自行管理此请求头。搜索与网页获取会将提供的查询和 URL 发送给 Parallel，请避免包含隐私数据。
+
+如需由模型进行检索，使用 `parallelConfig` 连接 Manager，再按下文所示将它传给 `StatefulAgent`。模型可通过 `mcp_list_tools`（`server_name: 'parallel'`）发现 Schema，再通过 `mcp_call_tool` 调用 `web_search` 或 `web_fetch`。保留现有的 LLM 配置，并按「生命周期」一节的说明在每次 Agent 运行前重新连接。
+
 ### Stdio
 
 Stdio 会启动本地子进程，仅适用于 Dart IO 平台。显式配置的环境变量会覆盖父进程中的同名变量，同时继承其余父进程变量。

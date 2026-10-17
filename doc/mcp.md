@@ -36,6 +36,62 @@ await manager.connectAll([
 ]);
 ```
 
+#### Parallel web search
+
+[Parallel Search MCP](https://docs.parallel.ai/integrations/mcp/search-mcp) provides `web_search` and `web_fetch` over Streamable HTTP. It supports free anonymous use without a Parallel account or API key; anonymous search uses Fast mode. Usage limits apply.
+
+This Dart VM walkthrough calls the tools directly, without an LLM client. Save it as `example/parallel_search.dart`, run `dart pub get`, then `dart run example/parallel_search.dart`:
+
+```dart
+import 'package:dart_agent_core/dart_agent_core.dart';
+
+const parallelConfig = McpConnectionConfig(
+  serverName: 'parallel',
+  type: McpTransportType.http,
+  url: 'https://search.parallel.ai/mcp',
+  headers: {'User-Agent': 'dart_agent_core/parallel-search-docs'},
+);
+
+Future<void> main() async {
+  final manager = McpManager();
+  try {
+    await manager.connectAll([parallelConfig]);
+    final session = manager.getSession('parallel');
+    if (session == null) {
+      throw StateError('Could not connect to Parallel Search MCP.');
+    }
+
+    // Inspect the current tool schemas before constructing requests.
+    for (final tool in session.tools) {
+      print('${tool.name}: ${tool.inputSchema}');
+    }
+
+    final queries = ['Dart supported platforms compilation'];
+    final search = await session.callToolResult('web_search', {
+      'objective': 'Find official Dart documentation about supported platforms.',
+      'search_queries': queries,
+    });
+    if (search.isError) throw StateError(search.text);
+    print(search.text);
+
+    // Fetch a known page; replace this URL with a search result to explore it.
+    final page = await session.callToolResult('web_fetch', {
+      'urls': ['https://dart.dev/overview'],
+      'objective': 'Describe the supported platforms and compilation targets.',
+      'search_queries': queries,
+    });
+    if (page.isError) throw StateError(page.text);
+    print(page.text);
+  } finally {
+    await manager.dispose();
+  }
+}
+```
+
+The custom `User-Agent` above is for Dart VM clients; browsers manage that header themselves. Search and fetch send the supplied queries and URLs to Parallel, so avoid including private data.
+
+For model-directed research, connect a manager with `parallelConfig` and pass it to `StatefulAgent` as shown below. The model can discover the schemas through `mcp_list_tools` with `server_name: 'parallel'`, then invoke `web_search` or `web_fetch` through `mcp_call_tool`. Keep your existing LLM configuration and reconnect before each agent run as described under Lifecycle.
+
 ### Stdio
 
 Stdio starts a local child process and is available on Dart IO platforms only. The configured environment overrides parent-process variables with the same names while inheriting all other parent variables.
